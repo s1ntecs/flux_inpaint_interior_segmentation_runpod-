@@ -187,6 +187,7 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         # mask
         control_items = normalize_control_items(payload.get("control_items"))
         mask_blur_radius = float(payload.get("mask_blur_radius", 3))
+        image_blur_radius = float(payload.get("image_blur_radius", 1))
 
         image_pil = url_to_pil(image_url)
 
@@ -224,7 +225,7 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             mask_image = Image.fromarray(
                 (mask * 255).astype(np.uint8)).convert("RGB")
             mask_image = mask_image.filter(
-                ImageFilter.GaussianBlur(radius=mask_blur_radius))
+                ImageFilter.GaussianBlur(radius=image_blur_radius))
         else:
             mask_image = url_to_pil(mask_url)
             mask_image = mask_image.resize((work_w, work_h),
@@ -247,6 +248,7 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
             generator=generator,
             width=work_w,
             height=work_h,
+            mask_blur_radius=mask_blur_radius
         ).images
 
         return {
