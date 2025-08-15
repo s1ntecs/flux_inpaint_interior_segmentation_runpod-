@@ -2,7 +2,7 @@ import os
 import torch
 
 from diffusers import FluxControlNetInpaintPipeline, FluxControlNetModel
-from image_gen_aux import DepthPreprocessor
+from controlnet_aux import CannyDetector
 
 from transformers import AutoImageProcessor, SegformerForSemanticSegmentation
 
@@ -29,9 +29,7 @@ def get_pipeline():
         torch_dtype=torch.bfloat16
     )
 
-    DepthPreprocessor.from_pretrained(
-        "LiheYoung/depth-anything-large-hf"
-    )
+    CannyDetector()
 
     AutoImageProcessor.from_pretrained(
         "nvidia/segformer-b5-finetuned-ade-640-640"

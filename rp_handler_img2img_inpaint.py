@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 from PIL import Image, ImageFilter
 
 from diffusers import FluxControlNetInpaintPipeline, FluxControlNetModel
-from image_gen_aux import DepthPreprocessor
+from controlnet_aux import CannyDetector
 
 from transformers import AutoImageProcessor, SegformerForSemanticSegmentation
 
@@ -92,7 +92,7 @@ def normalize_control_items(raw) -> List[str]:
 # ------------------------- ЗАГРУЗКА МОДЕЛЕЙ ------------------------------ #
 # БАЗА: FLUX.1-dev + depth ControlNet
 base_repo = "black-forest-labs/FLUX.1-dev"
-controlnet_model = "Shakker-Labs/FLUX.1-dev-ControlNet-Depth"
+controlnet_model = 'InstantX/FLUX.1-dev-Controlnet-Canny'
 
 CONTROLNET = FluxControlNetModel.from_pretrained(
     controlnet_model,
@@ -105,9 +105,7 @@ PIPELINE = FluxControlNetInpaintPipeline.from_pretrained(
     torch_dtype=DTYPE
 ).to(DEVICE)
 
-processor = DepthPreprocessor.from_pretrained(
-    "LiheYoung/depth-anything-large-hf"
-)
+processor = CannyDetector()
 
 seg_image_processor = AutoImageProcessor.from_pretrained(
     "nvidia/segformer-b5-finetuned-ade-640-640"
@@ -181,6 +179,17 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         control_guidance_end = float(payload.get(
             "control_guidance_end", 0.8))
 
+        # CANNY SCALE
+        canny_low_threshold = int(payload.get(
+            "canny_low_threshold", 50))
+        canny_high_threshold = int(payload.get(
+            "canny_high_threshold", 200))
+        canny_detect_resolution = int(payload.get(
+            "canny_detect_resolution", 1024))
+        canny_image_resolution = int(payload.get(
+            "canny_image_resolution", 1024))
+        blur = float(payload.get("canny_blur", 0.0))
+
         seed = int(payload.get("seed", random.randint(0, MAX_SEED)))
         generator = torch.Generator(device=DEVICE).manual_seed(seed)
 
@@ -195,8 +204,20 @@ def handler(job: Dict[str, Any]) -> Dict[str, Any]:
         image_pil = image_pil.resize((work_w, work_h),
                                      Image.Resampling.LANCZOS)
 
+        # Blur
+        canny_image_pil = image_pil
+        if blur > 0.0:
+            canny_image_pil = canny_image_pil.filter(
+                ImageFilter.GaussianBlur(radius=blur))
+
         # canny-карта
-        control_image = processor(image_pil)[0].convert("RGB")
+        control_image = processor(
+            canny_image_pil,
+            low_threshold=canny_low_threshold,
+            high_threshold=canny_high_threshold,
+            detect_resolution=canny_detect_resolution,
+            image_resolution=canny_image_resolution
+        )
 
         # РАБОТА С МАСКОЙ
         if not mask_url:
